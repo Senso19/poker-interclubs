@@ -3,7 +3,7 @@
 // on passe par ce petit proxy Vercel, comme le faisait la macro VBA côté Excel
 // (mêmes en-têtes Origin/Referer, même format de corps de requête).
 
-const BLINDVALET_REGISTER_URL = 'https://us-central1-blindvalet-production.cloudfunctions.net/tournamentRegister'
+const BLINDVALET_REGISTER_URL = 'https://us-central1-blindvalet-production.cloudfunctions.net/tournamentOp'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -32,6 +32,7 @@ export default async function handler(req, res) {
           manual: true,
           guest: true,
           undoAction: false,
+          op: 'tournamentRegister',
         },
       }),
     })
