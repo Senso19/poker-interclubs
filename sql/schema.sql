@@ -87,6 +87,30 @@ create table if not exists points_formula (
   config jsonb not null
 );
 
+-- Tirage des tables/sièges par étape --------------------------------------
+create table if not exists seatings (
+  id uuid primary key default gen_random_uuid(),
+  tournament_id uuid references tournaments(id) on delete cascade,
+  player_id uuid references players(id) on delete cascade,
+  table_number int not null,
+  seat_number int,
+  unique (tournament_id, player_id)
+);
+
+-- Si votre base existait déjà, ce bloc suffit à lui seul pour ajouter la
+-- fonctionnalité de tirage des tables (pas besoin de rejouer tout le script) :
+-- create table if not exists seatings (
+--   id uuid primary key default gen_random_uuid(),
+--   tournament_id uuid references tournaments(id) on delete cascade,
+--   player_id uuid references players(id) on delete cascade,
+--   table_number int not null,
+--   seat_number int,
+--   unique (tournament_id, player_id)
+-- );
+-- alter table seatings enable row level security;
+-- create policy "public read seatings" on seatings for select using (true);
+-- create policy "public write seatings" on seatings for all using (true) with check (true);
+
 insert into points_formula (id, config) values (
   '00000000-0000-0000-0000-000000000001',
   '{
@@ -119,6 +143,7 @@ alter table tournaments enable row level security;
 alter table registrations enable row level security;
 alter table results enable row level security;
 alter table points_formula enable row level security;
+alter table seatings enable row level security;
 
 create policy "public read clubs" on clubs for select using (true);
 create policy "public read admins" on admins for select using (true);
@@ -133,3 +158,5 @@ create policy "public read results" on results for select using (true);
 create policy "public write results" on results for all using (true) with check (true);
 create policy "public read points_formula" on points_formula for select using (true);
 create policy "public write points_formula" on points_formula for all using (true) with check (true);
+create policy "public read seatings" on seatings for select using (true);
+create policy "public write seatings" on seatings for all using (true) with check (true);
