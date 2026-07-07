@@ -399,6 +399,8 @@ function BlindValetTab() {
   const [seatingTables, setSeatingTables] = useState([]) // [[{playerId,name,clubId,seatNumber}], ...]
   const [drawing, setDrawing] = useState(false)
   const [loadingSeating, setLoadingSeating] = useState(false)
+  const [sendingSeating, setSendingSeating] = useState(false)
+  const [seatingLog, setSeatingLog] = useState([])
 
   const clubById = new Map(clubs.map((c, i) => [c.id, { ...c, suit: getSuit(c.slug, i) }]))
 
@@ -527,6 +529,44 @@ function BlindValetTab() {
     setDrawing(false)
   }
 
+  async function sendSeatingToBlindValet() {
+    if (!token.trim() || !tournIdInput.trim() || seatingTables.length === 0) return
+    setSendingSeating(true)
+    setSeatingLog([])
+    for (const [tIdx, table] of seatingTables.entries()) {
+      for (const p of table) {
+        try {
+          const res = await fetch('/api/blindvalet-move', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              token: token.trim(),
+              tournId: tournIdInput.trim(),
+              pseudo: p.name,
+              table: tIdx + 1,
+              seat: p.seatNumber,
+            }),
+          })
+          const data = await res.json()
+          if (data.ok) {
+            setSeatingLog((prev) => [...prev, { pseudo: p.name, status: `table ${tIdx + 1} / siège ${p.seatNumber} ✓` }])
+          } else if (data.reason === 'token_expired') {
+            setSeatingLog((prev) => [...prev, { pseudo: p.name, status: 'token expiré — arrêt' }])
+            setSendingSeating(false)
+            return
+          } else {
+            const detail = data.detail ? ` — ${String(data.detail).slice(0, 80)}` : ''
+            setSeatingLog((prev) => [...prev, { pseudo: p.name, status: `erreur (${data.reason})${detail}` }])
+          }
+        } catch {
+          setSeatingLog((prev) => [...prev, { pseudo: p.name, status: 'erreur réseau' }])
+        }
+        await new Promise((r) => setTimeout(r, 350))
+      }
+    }
+    setSendingSeating(false)
+  }
+
   return (
     <div className="space-y-6 max-w-2xl">
       <div className="bg-ink-800 border border-ink-600 rounded-xl p-5">
@@ -648,18 +688,29 @@ function BlindValetTab() {
           )}
 
           <div className="mt-5 pt-4 border-t border-ink-700">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-display text-sm text-parchment-100">Envoyer le placement sur BlindValet</h3>
-              <span className="text-xs font-mono text-gold-500 border border-gold-600/50 rounded-full px-2 py-0.5">
-                À venir
-              </span>
-            </div>
-            <p className="text-parchment-400 text-xs leading-relaxed">
-              Il nous manque encore l'appel réseau exact pour placer automatiquement chaque joueur à sa table
-              sur BlindValet. On le capturera ensemble la prochaine fois : F12 sur app.blindvalet.com → Network
-              → déplacer manuellement un joueur vers une table → "Copier en tant que cURL" sur la requête
-              correspondante. En attendant, le tirage ci-dessus reste valable pour placer les joueurs à la main.
+            <h3 className="font-display text-sm text-parchment-100 mb-1">Envoyer le placement sur BlindValet</h3>
+            <p className="text-parchment-600 text-xs leading-relaxed mb-3">
+              Place chaque joueur du tirage ci-dessus à sa table et son siège sur BlindValet. Les joueurs
+              doivent déjà être inscrits là-bas (bouton d'inscription plus haut) avant de lancer ceci.
             </p>
+            <button
+              onClick={sendSeatingToBlindValet}
+              disabled={sendingSeating || !token.trim() || !tournIdInput.trim() || seatingTables.length === 0}
+              className="btn-gold"
+            >
+              {sendingSeating ? 'Placement en cours…' : 'Envoyer le placement sur BlindValet'}
+            </button>
+
+            {seatingLog.length > 0 && (
+              <div className="mt-4 space-y-1 max-h-64 overflow-y-auto pr-1">
+                {seatingLog.map((l, i) => (
+                  <div key={i} className="flex justify-between text-xs font-mono">
+                    <span className="text-parchment-400">{l.pseudo}</span>
+                    <span className={l.status.includes('✓') ? 'text-felt-500' : 'text-card-red'}>{l.status}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
