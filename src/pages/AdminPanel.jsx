@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import ProtectedRoute from '../components/ProtectedRoute'
 import { getSuit } from '../components/ClubCard'
+import { drawTables } from '../lib/seating'
 
 function AdminPanelInner() {
   const [tab, setTab] = useState('tournaments')
@@ -387,6 +388,7 @@ function AdminsTab() {
 
 function BlindValetTab() {
   const [tournaments, setTournaments] = useState([])
+  const [clubs, setClubs] = useState([])
   const [selectedId, setSelectedId] = useState('')
   const [tournIdInput, setTournIdInput] = useState('')
   const [token, setToken] = useState('')
@@ -394,6 +396,11 @@ function BlindValetTab() {
   const [log, setLog] = useState([])
   const [running, setRunning] = useState(false)
   const [savingTournId, setSavingTournId] = useState(false)
+  const [seatingTables, setSeatingTables] = useState([]) // [[{playerId,name,clubId,seatNumber}], ...]
+  const [drawing, setDrawing] = useState(false)
+  const [loadingSeating, setLoadingSeating] = useState(false)
+
+  const clubById = new Map(clubs.map((c, i) => [c.id, { ...c, suit: getSuit(c.slug, i) }]))
 
   async function refreshTournaments() {
     const { data } = await supabase.from('tournaments').select('*').order('date')
@@ -401,6 +408,7 @@ function BlindValetTab() {
   }
   useEffect(() => {
     refreshTournaments()
+    supabase.from('clubs').select('*').order('name').then(({ data }) => setClubs(data ?? []))
   }, [])
 
   useEffect(() => {
@@ -416,11 +424,44 @@ function BlindValetTab() {
       }
       const { data } = await supabase
         .from('registrations')
-        .select('player_id, players(name), clubs(name)')
+        .select('player_id, club_id, players(name)')
         .eq('tournament_id', selectedId)
       setRegistered(data ?? [])
     }
     loadRegistered()
+  }, [selectedId])
+
+  useEffect(() => {
+    async function loadSeating() {
+      if (!selectedId) {
+        setSeatingTables([])
+        return
+      }
+      setLoadingSeating(true)
+      const { data } = await supabase
+        .from('seatings')
+        .select('table_number, seat_number, player_id, players(name, club_id)')
+        .eq('tournament_id', selectedId)
+        .order('table_number')
+        .order('seat_number')
+      if (data?.length) {
+        const grouped = new Map()
+        for (const row of data) {
+          if (!grouped.has(row.table_number)) grouped.set(row.table_number, [])
+          grouped.get(row.table_number).push({
+            playerId: row.player_id,
+            name: row.players?.name ?? '—',
+            clubId: row.players?.club_id,
+            seatNumber: row.seat_number,
+          })
+        }
+        setSeatingTables([...grouped.entries()].sort((a, b) => a[0] - b[0]).map(([, players]) => players))
+      } else {
+        setSeatingTables([])
+      }
+      setLoadingSeating(false)
+    }
+    loadSeating()
   }, [selectedId])
 
   async function saveTournId() {
@@ -462,13 +503,37 @@ function BlindValetTab() {
     setRunning(false)
   }
 
+  async function drawAndSave() {
+    if (registered.length === 0) return
+    setDrawing(true)
+    const pool = registered.map((r) => ({
+      playerId: r.player_id,
+      clubId: r.club_id,
+      name: r.players?.name ?? '—',
+    }))
+    const tables = drawTables(pool, { tableCount: 5, tableSize: 8, maxPerClub: 2 })
+    setSeatingTables(tables)
+
+    await supabase.from('seatings').delete().eq('tournament_id', selectedId)
+    const rows = tables.flatMap((table, tIdx) =>
+      table.map((p) => ({
+        tournament_id: selectedId,
+        player_id: p.playerId,
+        table_number: tIdx + 1,
+        seat_number: p.seatNumber,
+      }))
+    )
+    if (rows.length) await supabase.from('seatings').insert(rows)
+    setDrawing(false)
+  }
+
   return (
     <div className="space-y-6 max-w-2xl">
       <div className="bg-ink-800 border border-ink-600 rounded-xl p-5">
         <h2 className="font-display text-lg text-parchment-100 mb-1">Inscription automatique BlindValet</h2>
         <p className="text-xs text-parchment-600 mb-4">
           Inscrit en une fois, en mode invité, tous les joueurs déjà enregistrés sur le site pour l'étape
-          choisie. Le tirage automatique des tables/sièges sera ajouté ensuite.
+          choisie.
         </p>
 
         <Field label="Étape">
@@ -529,7 +594,7 @@ function BlindValetTab() {
 
       {log.length > 0 && (
         <div className="bg-ink-800 border border-ink-600 rounded-xl p-5">
-          <h3 className="font-display text-sm text-parchment-100 mb-3">Résultat</h3>
+          <h3 className="font-display text-sm text-parchment-100 mb-3">Résultat de l'inscription</h3>
           <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
             {log.map((l, i) => (
               <div key={i} className="flex justify-between text-xs font-mono">
@@ -541,17 +606,63 @@ function BlindValetTab() {
         </div>
       )}
 
-      <div className="bg-ink-800 border border-gold-600/40 rounded-xl p-5">
-        <h3 className="font-display text-sm text-parchment-100 mb-1">Tirage des tables/sièges</h3>
-        <span className="inline-block text-xs font-mono text-gold-500 border border-gold-600/50 rounded-full px-2 py-0.5 mb-3">
-          À venir
-        </span>
-        <p className="text-parchment-400 text-xs leading-relaxed">
-          Il nous manque encore l'appel réseau exact (drawSeats) pour l'ajouter ici. On le capturera ensemble
-          la prochaine fois : F12 sur app.blindvalet.com → Network → lancer un tirage de places → "Copier en
-          tant que cURL" sur la requête correspondante.
-        </p>
-      </div>
+      {selectedId && (
+        <div className="bg-ink-800 border border-ink-600 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-display text-lg text-parchment-100">Tirage des tables</h2>
+            <button onClick={drawAndSave} disabled={drawing || registered.length === 0} className="btn-gold">
+              {drawing ? 'Tirage…' : seatingTables.length ? 'Retirer les tables' : 'Tirer les tables'}
+            </button>
+          </div>
+          <p className="text-xs text-parchment-600 mb-4">
+            5 tables de 8 joueurs maximum, 2 joueurs par club maximum à chaque table. Le tirage est enregistré
+            et reste visible même après avoir quitté la page.
+          </p>
+
+          {loadingSeating ? (
+            <p className="text-parchment-600 text-sm font-mono">Chargement…</p>
+          ) : seatingTables.length === 0 ? (
+            <p className="text-parchment-600 text-sm italic">Aucun tirage effectué pour cette étape.</p>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {seatingTables.map((table, tIdx) => (
+                <div key={tIdx} className="bg-ink-700/30 border border-ink-700 rounded-lg p-3">
+                  <div className="text-xs font-mono text-parchment-600 mb-2">Table {tIdx + 1}</div>
+                  <ul className="space-y-1">
+                    {[...table]
+                      .sort((a, b) => (a.seatNumber ?? 0) - (b.seatNumber ?? 0))
+                      .map((p) => {
+                        const club = clubById.get(p.clubId)
+                        return (
+                          <li key={p.playerId} className="flex items-center gap-2 text-sm">
+                            <span className="font-mono text-xs text-parchment-600 w-4">{p.seatNumber}</span>
+                            <span className={`text-xs ${club?.suit.color ?? ''}`}>{club?.suit.symbol}</span>
+                            <span className="text-parchment-100 truncate">{p.name}</span>
+                          </li>
+                        )
+                      })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-5 pt-4 border-t border-ink-700">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="font-display text-sm text-parchment-100">Envoyer le placement sur BlindValet</h3>
+              <span className="text-xs font-mono text-gold-500 border border-gold-600/50 rounded-full px-2 py-0.5">
+                À venir
+              </span>
+            </div>
+            <p className="text-parchment-400 text-xs leading-relaxed">
+              Il nous manque encore l'appel réseau exact pour placer automatiquement chaque joueur à sa table
+              sur BlindValet. On le capturera ensemble la prochaine fois : F12 sur app.blindvalet.com → Network
+              → déplacer manuellement un joueur vers une table → "Copier en tant que cURL" sur la requête
+              correspondante. En attendant, le tirage ci-dessus reste valable pour placer les joueurs à la main.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
