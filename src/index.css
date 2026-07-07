@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(1400px 900px at 100% 100%, rgba(59, 130, 246, 0.55) 0%, transparent 60%),
+    linear-gradient(160deg, #0A1730 0%, #0F2148 30%, #163570 55%, #1C4CA8 80%, #2F63EB 100%);
+  background-attachment: fixed;
+  color: #FFFFFF;
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+
+::selection {
+  background: #2F63EB;
+  color: #FFFFFF;
+}
+
+/* focus visibility, kept deliberately simple */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid #1C6FB8;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+
+.suit-red { color: #A6362C; }
+.suit-black { color: #12283C; }
+
+@layer components {
+  .input {
+    @apply w-full bg-ink-800 border border-ink-600 rounded px-3 py-2 text-parchment-100 focus:border-gold-500 outline-none;
+  }
+  .btn-gold {
+    @apply bg-gradient-to-r from-[#142B57] to-[#2F63EB] hover:brightness-110 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-all;
+  }
+  .btn-outline {
+    @apply border border-ink-600 hover:border-gold-500 hover:text-gold-500 px-4 py-2 rounded-lg text-sm text-parchment-400 transition-colors bg-ink-800;
+  }
+  .field-label {
+    @apply block text-xs font-semibold uppercase tracking-wide text-parchment-400 mb-1;
+  }
+}
