@@ -23,7 +23,7 @@ export default function PublicView() {
       if (!openId || registrationsByTournament[openId]) return
       const { data } = await supabase
         .from('registrations')
-        .select('*, players(name, club_id), clubs(name, slug)')
+        .select('*, players(name, pseudo, club_id), clubs(name, slug)')
         .eq('tournament_id', openId)
       setRegistrationsByTournament((prev) => ({ ...prev, [openId]: data ?? [] }))
     }
@@ -82,7 +82,7 @@ export default function PublicView() {
                         <ul className="space-y-1">
                           {players.map((r) => (
                             <li key={r.player_id} className="text-sm text-parchment-300">
-                              {r.players?.name}
+                              {r.players?.pseudo || r.players?.name}
                             </li>
                           ))}
                         </ul>
