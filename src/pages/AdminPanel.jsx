@@ -194,10 +194,10 @@ function PlayersTab() {
   async function addPlayer(e) {
     e.preventDefault()
     setError('')
-    if (!form.name.trim() || !form.club_id) return
+    if (!form.pseudo.trim() || !form.club_id) return
     const { error } = await supabase
       .from('players')
-      .insert({ name: form.name.trim(), pseudo: form.pseudo.trim() || null, club_id: form.club_id })
+      .insert({ pseudo: form.pseudo.trim(), name: form.name.trim() || form.pseudo.trim(), club_id: form.club_id })
     if (error) {
       setError(error.message)
       return
@@ -215,18 +215,18 @@ function PlayersTab() {
     <div className="grid md:grid-cols-2 gap-8">
       <form onSubmit={addPlayer} className="bg-ink-800 border border-ink-600 rounded-xl p-5 space-y-3 h-fit">
         <h2 className="font-display text-lg text-parchment-100 mb-1">Ajouter un joueur</h2>
-        <Field label="Nom">
-          <input
-            className="input"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
-        </Field>
-        <Field label="Pseudo (optionnel)">
+        <Field label="Pseudo">
           <input
             className="input"
             value={form.pseudo}
             onChange={(e) => setForm({ ...form, pseudo: e.target.value })}
+          />
+        </Field>
+        <Field label="Nom - Prénom (optionnel)">
+          <input
+            className="input"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
         </Field>
         <Field label="Club">
@@ -270,7 +270,7 @@ function PlayersTab() {
                     key={p.id}
                     className="text-xs font-mono text-parchment-400 bg-ink-700/60 border border-ink-700 rounded-full pl-3 pr-1 py-1 flex items-center gap-2"
                   >
-                    {p.name}
+                    {p.pseudo || p.name}
                     <button onClick={() => removePlayer(p.id)} className="text-parchment-600 hover:text-card-red">
                       ✕
                     </button>
@@ -426,7 +426,7 @@ function BlindValetTab() {
       }
       const { data } = await supabase
         .from('registrations')
-        .select('player_id, club_id, players(name)')
+        .select('player_id, club_id, players(name, pseudo)')
         .eq('tournament_id', selectedId)
       setRegistered(data ?? [])
     }
@@ -442,7 +442,7 @@ function BlindValetTab() {
       setLoadingSeating(true)
       const { data } = await supabase
         .from('seatings')
-        .select('table_number, seat_number, player_id, players(name, club_id)')
+        .select('table_number, seat_number, player_id, players(name, pseudo, club_id)')
         .eq('tournament_id', selectedId)
         .order('table_number')
         .order('seat_number')
@@ -452,7 +452,7 @@ function BlindValetTab() {
           if (!grouped.has(row.table_number)) grouped.set(row.table_number, [])
           grouped.get(row.table_number).push({
             playerId: row.player_id,
-            name: row.players?.name ?? '—',
+            name: row.players?.pseudo || row.players?.name || '—',
             clubId: row.players?.club_id,
             seatNumber: row.seat_number,
           })
@@ -479,7 +479,7 @@ function BlindValetTab() {
     setRunning(true)
     setLog([])
     for (const r of registered) {
-      const pseudo = r.players?.name ?? 'Joueur'
+      const pseudo = r.players?.pseudo || r.players?.name || 'Joueur'
       try {
         const res = await fetch('/api/blindvalet-register', {
           method: 'POST',
@@ -511,7 +511,7 @@ function BlindValetTab() {
     const pool = registered.map((r) => ({
       playerId: r.player_id,
       clubId: r.club_id,
-      name: r.players?.name ?? '—',
+      name: r.players?.pseudo || r.players?.name || '—',
     }))
     const tables = drawTables(pool, { tableCount: 5, tableSize: 8, maxPerClub: 2 })
     setSeatingTables(tables)
