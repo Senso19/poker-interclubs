@@ -12,7 +12,7 @@ export default function Layout({ children }) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="sticky top-0 z-20">
+      <header>
         <div className="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between">
           <Link to="/clubs" className="flex items-baseline gap-2 group">
             <span className="font-display text-xl tracking-wide text-white">
