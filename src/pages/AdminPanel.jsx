@@ -450,7 +450,8 @@ function BlindValetTab() {
           setLog((prev) => [...prev, { pseudo, status: 'token expiré — arrêt' }])
           break
         } else {
-          setLog((prev) => [...prev, { pseudo, status: `erreur (${data.reason})` }])
+          const detail = data.detail ? ` — ${String(data.detail).slice(0, 80)}` : ''
+          setLog((prev) => [...prev, { pseudo, status: `erreur (${data.reason})${detail}` }])
         }
       } catch {
         setLog((prev) => [...prev, { pseudo, status: 'erreur réseau' }])
