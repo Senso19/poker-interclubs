@@ -55,8 +55,12 @@ create table if not exists tournaments (
   name text not null,
   date date not null,
   location text,
-  status text not null default 'a_venir' check (status in ('a_venir', 'en_cours', 'termine'))
+  status text not null default 'a_venir' check (status in ('a_venir', 'en_cours', 'termine')),
+  blindvalet_tourn_id text
 );
+
+-- Si la table existait déjà (installation précédente), exécutez aussi :
+-- alter table tournaments add column if not exists blindvalet_tourn_id text;
 
 -- Inscriptions : les 10 joueurs d'un club pour un tournoi donné --------------
 create table if not exists registrations (
