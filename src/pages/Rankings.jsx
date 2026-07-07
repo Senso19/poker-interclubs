@@ -97,9 +97,8 @@ export default function Rankings() {
           {activeTournamentId && (
             <StageResultsEditor
               tournamentId={activeTournamentId}
-              players={players}
+              clubs={clubs}
               formula={formula}
-              existingResults={results.filter((r) => r.tournament_id === activeTournamentId)}
               onSaved={loadAll}
             />
           )}
@@ -142,37 +141,66 @@ function RankingTable({ title, rows }) {
   )
 }
 
-function StageResultsEditor({ tournamentId, players, formula, existingResults, onSaved }) {
+function StageResultsEditor({ tournamentId, clubs, formula, onSaved }) {
   const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    const byPosition = new Map(existingResults.map((r) => [r.position, r]))
-    const initial = Array.from({ length: 10 }, (_, i) => {
-      const pos = i + 1
-      const existing = byPosition.get(pos)
-      return {
-        position: pos,
-        playerId: existing?.player_id ?? '',
-        koCount: existing?.ko_count ?? 0,
-      }
-    })
-    setRows(initial)
-  }, [tournamentId, existingResults])
+  const clubById = useMemo(() => new Map(clubs.map((c, i) => [c.id, { ...c, suit: getSuit(c.slug, i) }])), [clubs])
 
-  function updateRow(index, patch) {
-    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)))
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      const { data: regs } = await supabase
+        .from('registrations')
+        .select('player_id, club_id, players(name)')
+        .eq('tournament_id', tournamentId)
+      const { data: existing } = await supabase
+        .from('results')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+
+      const resultByPlayer = new Map((existing ?? []).map((r) => [r.player_id, r]))
+
+      const initial = (regs ?? [])
+        .map((r) => {
+          const club = clubById.get(r.club_id)
+          const found = resultByPlayer.get(r.player_id)
+          return {
+            playerId: r.player_id,
+            name: r.players?.name ?? '—',
+            club,
+            position: found?.position ?? '',
+            koCount: found?.ko_count ?? 0,
+          }
+        })
+        .sort((a, b) => {
+          const pa = Number(a.position) || 999
+          const pb = Number(b.position) || 999
+          if (pa !== pb) return pa - pb
+          return a.name.localeCompare(b.name)
+        })
+
+      setRows(initial)
+      setLoading(false)
+    }
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournamentId, clubs])
+
+  function updateRow(playerId, patch) {
+    setRows((prev) => prev.map((r) => (r.playerId === playerId ? { ...r, ...patch } : r)))
   }
 
   async function save() {
     setSaving(true)
     await supabase.from('results').delete().eq('tournament_id', tournamentId)
     const toInsert = rows
-      .filter((r) => r.playerId)
+      .filter((r) => r.position !== '' && r.position !== null && r.position !== undefined)
       .map((r) => ({
         tournament_id: tournamentId,
         player_id: r.playerId,
-        position: r.position,
+        position: Number(r.position),
         ko_count: Number(r.koCount) || 0,
       }))
     if (toInsert.length) await supabase.from('results').insert(toInsert)
@@ -180,45 +208,64 @@ function StageResultsEditor({ tournamentId, players, formula, existingResults, o
     onSaved?.()
   }
 
+  if (loading) return <p className="text-white/70 font-mono text-sm">Chargement des inscrits…</p>
+
+  if (rows.length === 0) {
+    return (
+      <div className="bg-ink-800 border border-ink-600 rounded-xl p-5">
+        <p className="text-parchment-600 text-sm">
+          Aucun joueur inscrit pour cette étape. Les clubs doivent d'abord inscrire leurs 10 joueurs chacun.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="bg-ink-800 border border-ink-600 rounded-xl p-5">
-      <div className="grid grid-cols-[2rem_1fr_5rem_5rem] gap-3 text-xs font-mono text-parchment-600 px-1 mb-2">
-        <span>#</span>
+      <p className="text-xs text-parchment-600 mb-4">
+        {rows.length} joueur{rows.length > 1 ? 's' : ''} inscrit{rows.length > 1 ? 's' : ''} pour cette étape —
+        attribuez à chacun sa position générale finale (1 à {rows.length}), tous clubs confondus.
+      </p>
+      <div className="grid grid-cols-[4.5rem_1fr_5rem_5rem] gap-3 text-xs font-mono text-parchment-600 px-1 mb-2">
+        <span>Position</span>
         <span>Joueur</span>
         <span>KO</span>
         <span className="text-right">Points</span>
       </div>
-      <div className="space-y-1.5">
-        {rows.map((row, i) => (
-          <div key={row.position} className="grid grid-cols-[2rem_1fr_5rem_5rem] gap-3 items-center">
-            <span className="font-mono text-parchment-400">{row.position}</span>
-            <select
-              className="input py-1.5"
-              value={row.playerId}
-              onChange={(e) => updateRow(i, { playerId: e.target.value })}
-            >
-              <option value="">—</option>
-              {players.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+      <div className="space-y-1.5 max-h-[32rem] overflow-y-auto pr-1">
+        {rows.map((row) => (
+          <div key={row.playerId} className="grid grid-cols-[4.5rem_1fr_5rem_5rem] gap-3 items-center">
+            <input
+              type="number"
+              min="1"
+              max={rows.length}
+              placeholder="—"
+              className="input py-1.5 text-center"
+              value={row.position}
+              onChange={(e) => updateRow(row.playerId, { position: e.target.value })}
+            />
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`text-xs font-mono shrink-0 ${row.club?.suit.color ?? ''}`}>
+                {row.club?.suit.symbol}
+              </span>
+              <span className="text-parchment-100 truncate">{row.name}</span>
+              <span className="text-xs text-parchment-600 truncate">({row.club?.name})</span>
+            </div>
             <input
               type="number"
               min="0"
               className="input py-1.5"
               value={row.koCount}
-              onChange={(e) => updateRow(i, { koCount: e.target.value })}
+              onChange={(e) => updateRow(row.playerId, { koCount: e.target.value })}
             />
             <span className="font-mono text-gold-500 text-right">
-              {row.playerId ? computePoints(row.position, row.koCount, formula) : '—'}
+              {row.position !== '' ? computePoints(row.position, row.koCount, formula) : '—'}
             </span>
           </div>
         ))}
       </div>
       <button onClick={save} disabled={saving} className="btn-gold mt-4">
-        {saving ? 'Enregistrement…' : 'Enregistrer les résultats de l\'étape'}
+        {saving ? 'Enregistrement…' : 'Enregistrer le classement général de l\'étape'}
       </button>
     </div>
   )
