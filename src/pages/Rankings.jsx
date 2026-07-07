@@ -62,7 +62,7 @@ export default function Rankings() {
       <div className="grid lg:grid-cols-2 gap-8 mb-12">
         <RankingTable title="Classement individuel" rows={individualRanking.map((r, i) => ({
           rank: i + 1,
-          label: r.player.name,
+          label: r.player.pseudo || r.player.name,
           sub: clubById.get(r.player.club_id)?.name,
           suit: clubById.get(r.player.club_id)?.suit,
           points: r.totalPoints,
@@ -153,7 +153,7 @@ function StageResultsEditor({ tournamentId, clubs, formula, onSaved }) {
       setLoading(true)
       const { data: regs } = await supabase
         .from('registrations')
-        .select('player_id, club_id, players(name)')
+        .select('player_id, club_id, players(name, pseudo)')
         .eq('tournament_id', tournamentId)
       const { data: existing } = await supabase
         .from('results')
@@ -168,7 +168,7 @@ function StageResultsEditor({ tournamentId, clubs, formula, onSaved }) {
           const found = resultByPlayer.get(r.player_id)
           return {
             playerId: r.player_id,
-            name: r.players?.name ?? '—',
+            name: r.players?.pseudo || r.players?.name || '—',
             club,
             position: found?.position ?? '',
             koCount: found?.ko_count ?? 0,
