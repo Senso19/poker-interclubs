@@ -4,6 +4,7 @@ Site de gestion du tournoi interclubs entre **HPCL**, **19PokerClub**, **OPC** e
 
 ## 1. Créer le projet Supabase
 
+
 1. Sur [supabase.com](https://supabase.com), créez un nouveau projet.
 2. Allez dans **SQL Editor**, collez le contenu de `sql/schema.sql`, exécutez.
    Cela crée les tables, les 4 clubs, un compte administrateur principal
