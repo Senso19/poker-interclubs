@@ -386,18 +386,171 @@ function AdminsTab() {
 }
 
 function BlindValetTab() {
+  const [tournaments, setTournaments] = useState([])
+  const [selectedId, setSelectedId] = useState('')
+  const [tournIdInput, setTournIdInput] = useState('')
+  const [token, setToken] = useState('')
+  const [registered, setRegistered] = useState([])
+  const [log, setLog] = useState([])
+  const [running, setRunning] = useState(false)
+  const [savingTournId, setSavingTournId] = useState(false)
+
+  async function refreshTournaments() {
+    const { data } = await supabase.from('tournaments').select('*').order('date')
+    setTournaments(data ?? [])
+  }
+  useEffect(() => {
+    refreshTournaments()
+  }, [])
+
+  useEffect(() => {
+    const t = tournaments.find((t) => t.id === selectedId)
+    setTournIdInput(t?.blindvalet_tourn_id ?? '')
+  }, [selectedId, tournaments])
+
+  useEffect(() => {
+    async function loadRegistered() {
+      if (!selectedId) {
+        setRegistered([])
+        return
+      }
+      const { data } = await supabase
+        .from('registrations')
+        .select('player_id, players(name), clubs(name)')
+        .eq('tournament_id', selectedId)
+      setRegistered(data ?? [])
+    }
+    loadRegistered()
+  }, [selectedId])
+
+  async function saveTournId() {
+    if (!selectedId) return
+    setSavingTournId(true)
+    await supabase.from('tournaments').update({ blindvalet_tourn_id: tournIdInput.trim() }).eq('id', selectedId)
+    await refreshTournaments()
+    setSavingTournId(false)
+  }
+
+  async function registerAll() {
+    if (!token.trim() || !tournIdInput.trim() || registered.length === 0) return
+    setRunning(true)
+    setLog([])
+    for (const r of registered) {
+      const pseudo = r.players?.name ?? 'Joueur'
+      try {
+        const res = await fetch('/api/blindvalet-register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: token.trim(), tournId: tournIdInput.trim(), pseudo }),
+        })
+        const data = await res.json()
+        if (data.ok) {
+          setLog((prev) => [...prev, { pseudo, status: data.already ? 'déjà inscrit' : 'inscrit ✓' }])
+        } else if (data.reason === 'token_expired') {
+          setLog((prev) => [...prev, { pseudo, status: 'token expiré — arrêt' }])
+          break
+        } else {
+          setLog((prev) => [...prev, { pseudo, status: `erreur (${data.reason})` }])
+        }
+      } catch {
+        setLog((prev) => [...prev, { pseudo, status: 'erreur réseau' }])
+      }
+      // petite pause entre chaque appel pour ne pas bombarder l'API
+      await new Promise((r) => setTimeout(r, 350))
+    }
+    setRunning(false)
+  }
+
   return (
-    <div className="bg-ink-800 border border-ink-600 rounded-xl p-8 max-w-2xl">
-      <h2 className="font-display text-xl text-parchment-100 mb-2">Intégration BlindValet</h2>
-      <span className="inline-block text-xs font-mono text-gold-500 border border-gold-600/50 rounded-full px-2 py-0.5 mb-4">
-        Prévu en V2
-      </span>
-      <p className="text-parchment-400 text-sm leading-relaxed">
-        Cette section accueillera l'inscription automatique des joueurs qualifiés vers BlindValet, ainsi que la
-        gestion des tables et des sièges, une fois la base commune de tournois et de joueurs stabilisée. Elle
-        s'appuiera sur la même logique d'interception déjà utilisée pour vos extensions Chrome DIX'9 (BlindValet
-        troll / overlay prizepool).
-      </p>
+    <div className="space-y-6 max-w-2xl">
+      <div className="bg-ink-800 border border-ink-600 rounded-xl p-5">
+        <h2 className="font-display text-lg text-parchment-100 mb-1">Inscription automatique BlindValet</h2>
+        <p className="text-xs text-parchment-600 mb-4">
+          Inscrit en une fois, en mode invité, tous les joueurs déjà enregistrés sur le site pour l'étape
+          choisie. Le tirage automatique des tables/sièges sera ajouté ensuite.
+        </p>
+
+        <Field label="Étape">
+          <select className="input" value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
+            <option value="">— choisir une étape —</option>
+            {tournaments.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {selectedId && (
+          <>
+            <div className="mt-3">
+              <Field label="ID du tournoi BlindValet">
+                <div className="flex gap-2">
+                  <input
+                    className="input"
+                    value={tournIdInput}
+                    onChange={(e) => setTournIdInput(e.target.value)}
+                    placeholder="ex : aB3xQ9..."
+                  />
+                  <button onClick={saveTournId} disabled={savingTournId} className="btn-outline whitespace-nowrap">
+                    {savingTournId ? '…' : 'Enregistrer'}
+                  </button>
+                </div>
+              </Field>
+            </div>
+
+            <div className="mt-3">
+              <Field label="Token Bearer BlindValet (F12 → Network → copier après 'Bearer ', expire ~1h)">
+                <input
+                  className="input font-mono text-xs"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  placeholder="eyJhbGciOi..."
+                />
+              </Field>
+            </div>
+
+            <p className="text-xs text-parchment-600 mt-3">
+              {registered.length} joueur{registered.length > 1 ? 's' : ''} inscrit
+              {registered.length > 1 ? 's' : ''} sur le site pour cette étape.
+            </p>
+
+            <button
+              onClick={registerAll}
+              disabled={running || !token.trim() || !tournIdInput.trim() || registered.length === 0}
+              className="btn-gold mt-4"
+            >
+              {running ? 'Inscription en cours…' : `Inscrire les ${registered.length} joueurs sur BlindValet`}
+            </button>
+          </>
+        )}
+      </div>
+
+      {log.length > 0 && (
+        <div className="bg-ink-800 border border-ink-600 rounded-xl p-5">
+          <h3 className="font-display text-sm text-parchment-100 mb-3">Résultat</h3>
+          <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+            {log.map((l, i) => (
+              <div key={i} className="flex justify-between text-xs font-mono">
+                <span className="text-parchment-400">{l.pseudo}</span>
+                <span className={l.status.includes('✓') ? 'text-felt-500' : 'text-card-red'}>{l.status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="bg-ink-800 border border-gold-600/40 rounded-xl p-5">
+        <h3 className="font-display text-sm text-parchment-100 mb-1">Tirage des tables/sièges</h3>
+        <span className="inline-block text-xs font-mono text-gold-500 border border-gold-600/50 rounded-full px-2 py-0.5 mb-3">
+          À venir
+        </span>
+        <p className="text-parchment-400 text-xs leading-relaxed">
+          Il nous manque encore l'appel réseau exact (drawSeats) pour l'ajouter ici. On le capturera ensemble
+          la prochaine fois : F12 sur app.blindvalet.com → Network → lancer un tirage de places → "Copier en
+          tant que cURL" sur la requête correspondante.
+        </p>
+      </div>
     </div>
   )
 }
