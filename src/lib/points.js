@@ -13,10 +13,22 @@ export const DEFAULT_FORMULA = {
     { position: 8, points: 4 },
     { position: 9, points: 2 },
     { position: 10, points: 1 },
+    ...Array.from({ length: 30 }, (_, i) => ({ position: i + 11, points: 0 })),
   ],
   pointsParKO: 1,
   koExponent: 1, // 1 = linéaire (points x KO). >1 = progression exponentielle (chaque KO supplémentaire rapporte plus que le précédent).
   pointsParticipation: 0, // bonus fixe pour toute personne classée, même hors barème
+}
+
+// Garantit que le barème couvre bien les 40 positions (1 à 40), même si une
+// configuration plus ancienne n'en avait que 10 : complète avec 0 point.
+export function normalizeFormula(formula, maxPosition = 40) {
+  const byPosition = new Map((formula.positions ?? []).map((p) => [p.position, p.points]))
+  const positions = Array.from({ length: maxPosition }, (_, i) => {
+    const position = i + 1
+    return { position, points: byPosition.get(position) ?? 0 }
+  })
+  return { ...formula, positions }
 }
 
 // Calcule les points d'un joueur pour une étape donnée.
