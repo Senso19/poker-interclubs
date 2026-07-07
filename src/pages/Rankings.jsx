@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { getSuit } from '../components/ClubCard'
-import { computePoints, buildRankings, DEFAULT_FORMULA } from '../lib/points'
+import { computePoints, buildRankings, DEFAULT_FORMULA, normalizeFormula } from '../lib/points'
 
 export default function Rankings() {
   const { isMainAdmin } = useAuth()
@@ -272,7 +272,7 @@ function StageResultsEditor({ tournamentId, clubs, formula, onSaved }) {
 }
 
 function FormulaEditor({ formula, onSaved }) {
-  const [local, setLocal] = useState(formula)
+  const [local, setLocal] = useState(() => normalizeFormula(formula))
   const [saving, setSaving] = useState(false)
 
   function updatePosition(position, points) {
@@ -291,8 +291,9 @@ function FormulaEditor({ formula, onSaved }) {
 
   return (
     <div className="bg-ink-800 border border-gold-600/40 rounded-xl p-5 mb-8">
-      <h3 className="font-display text-lg text-parchment-100 mb-4">Barème de points</h3>
-      <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 mb-5">
+      <h3 className="font-display text-lg text-parchment-100 mb-1">Barème de points</h3>
+      <p className="text-xs text-parchment-600 mb-4">Points attribués selon la position finale, de 1 à 40.</p>
+      <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 mb-5 max-h-72 overflow-y-auto pr-1">
         {local.positions.map((p) => (
           <label key={p.position} className="text-center">
             <span className="block text-xs font-mono text-parchment-600 mb-1">{p.position}ᵉ</span>
