@@ -88,11 +88,11 @@ function ClubManageInner() {
   }
 
   async function addPlayer() {
-    const name = newPlayer.name.trim()
-    if (!name || !club) return
+    const pseudo = newPlayer.pseudo.trim()
+    if (!pseudo || !club) return
     const { error } = await supabase
       .from('players')
-      .insert({ name, pseudo: newPlayer.pseudo.trim() || null, club_id: club.id })
+      .insert({ pseudo, name: newPlayer.name.trim() || pseudo, club_id: club.id })
     if (error) {
       setMessage("Erreur lors de l'ajout du joueur : " + error.message)
       return
@@ -202,7 +202,7 @@ function ClubManageInner() {
                     <option value="">— siège libre —</option>
                     {clubPlayers.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name}
+                        {p.pseudo || p.name}
                       </option>
                     ))}
                   </select>
@@ -220,15 +220,15 @@ function ClubManageInner() {
 
         <div className="flex flex-wrap gap-2 mb-6">
           <input
-            value={newPlayer.name}
-            onChange={(e) => setNewPlayer({ ...newPlayer, name: e.target.value })}
-            placeholder="Nom du joueur"
+            value={newPlayer.pseudo}
+            onChange={(e) => setNewPlayer({ ...newPlayer, pseudo: e.target.value })}
+            placeholder="Pseudo"
             className="input flex-1 min-w-[10rem] max-w-xs"
           />
           <input
-            value={newPlayer.pseudo}
-            onChange={(e) => setNewPlayer({ ...newPlayer, pseudo: e.target.value })}
-            placeholder="Pseudo (optionnel)"
+            value={newPlayer.name}
+            onChange={(e) => setNewPlayer({ ...newPlayer, name: e.target.value })}
+            placeholder="Nom - Prénom (optionnel)"
             className="input flex-1 min-w-[10rem] max-w-xs"
           />
           <button onClick={addPlayer} className="btn-outline">
@@ -242,8 +242,8 @@ function ClubManageInner() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-parchment-600 border-b border-ink-700">
-                <th className="pb-2 pr-4 font-semibold">Nom</th>
                 <th className="pb-2 pr-4 font-semibold">Pseudo</th>
+                <th className="pb-2 pr-4 font-semibold">Nom - Prénom</th>
                 <th className="pb-2 pr-4 font-semibold">Participations</th>
                 <th className="pb-2 font-semibold text-right">Action</th>
               </tr>
@@ -251,8 +251,8 @@ function ClubManageInner() {
             <tbody>
               {clubPlayers.map((p) => (
                 <tr key={p.id} className="border-b border-ink-700/60 last:border-0">
-                  <td className="py-2.5 pr-4 text-parchment-100">{p.name}</td>
-                  <td className="py-2.5 pr-4 text-parchment-400 font-mono text-xs">{p.pseudo || '—'}</td>
+                  <td className="py-2.5 pr-4 text-parchment-100">{p.pseudo || p.name}</td>
+                  <td className="py-2.5 pr-4 text-parchment-400 font-mono text-xs">{p.name || '—'}</td>
                   <td className="py-2.5 pr-4 font-mono text-gold-500">{p.participations}</td>
                   <td className="py-2.5 text-right">
                     <button
